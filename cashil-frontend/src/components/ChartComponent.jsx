@@ -9,13 +9,34 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // Fungsi untuk memproses data transaksi menjadi format yang sesuai untuk Recharts
 const processChartData = (transactions) => {
   if (!transactions || transactions.length === 0) {
+    console.log("No transactions data available for chart.");
     return []; // Kembalikan array kosong jika tidak ada transaksi
   }
 
+  console.log("Processing transactions for chart:", transactions);
+
   // Mengelompokkan transaksi berdasarkan tanggal dan menghitung total pendapatan/pengeluaran harian
   const dailyDataReducer = transactions.reduce((acc, tx) => {
-    const date = tx.date.split('T')[0]; // Ekstrak bagian tanggal (YYYY-MM-DD)
-    
+    // Log raw date string from transaction
+    console.log(`Raw tx.date: ${tx.date}`);
+
+    // --- PERUBAHAN DI SINI ---
+    // Buat objek Date dari string ISO 8601 lengkap
+    const dateObj = new Date(tx.date);
+
+    // Ekstrak komponen tanggal (tahun, bulan, hari) berdasarkan zona waktu LOKAL browser
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1; // getMonth() berbasis 0, jadi tambahkan 1
+    const day = dateObj.getDate();
+
+    // Format ulang menjadi string YYYY-MM-DD untuk digunakan sebagai kunci pengelompokan
+    // Pastikan bulan dan hari memiliki leading zero jika kurang dari 10
+    const date = `${year}-${month < 10 ? '0' + month : month}-${day < 10 ? '0' + day : day}`;
+    // Log the constructed YYYY-MM-DD date string based on local time
+    console.log(`Constructed local date (YYYY-MM-DD) for grouping: ${date}`);
+    // --- AKHIR PERUBAHAN ---
+
+
     if (!acc[date]) {
       acc[date] = { income: 0, expenses: 0 };
     }
@@ -23,20 +44,37 @@ const processChartData = (transactions) => {
     if (tx.amount > 0) {
       acc[date].income += tx.amount;
     } else {
-      acc[date].expenses += Math.abs(tx.amount); 
+      acc[date].expenses += Math.abs(tx.amount);
     }
     return acc;
   }, {});
 
+  console.log("Daily data reducer result:", dailyDataReducer);
+
   // Ubah objek yang dikelompokkan menjadi array dan urutkan berdasarkan tanggal
   const chartData = Object.keys(dailyDataReducer)
-    .map(date => ({
-      name: new Date(date).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }), // Format tanggal untuk sumbu X
-      income: dailyDataReducer[date].income,
-      expenses: dailyDataReducer[date].expenses,
-      fullDate: date, // Simpan tanggal asli untuk pengurutan
-    }))
+    .map(date => {
+      // --- PERUBAHAN DI SINI ---
+      // Buat objek Date lagi dari string date YYYY-MM-DD (ini akan diinterpretasikan
+      // sebagai tengah malam di zona waktu lokal, yang sesuai untuk tampilan tanggal)
+      const localDateForDisplay = new Date(date);
+
+      // Format tanggal menggunakan toLocaleDateString dari objek Date lokal
+      const formattedDate = localDateForDisplay.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+      // Log the final formatted date string
+      console.log(`Formatted date for chart axis for ${date}: ${formattedDate}`);
+      // --- AKHIR PERUBAHAN ---
+
+      return {
+        name: formattedDate, // Gunakan tanggal yang sudah diformat
+        income: dailyDataReducer[date].income,
+        expenses: dailyDataReducer[date].expenses,
+        fullDate: date, // Simpan tanggal asli (YYYY-MM-DD lokal) untuk pengurutan
+      };
+    })
     .sort((a, b) => new Date(a.fullDate) - new Date(b.fullDate)); // Urutkan data berdasarkan tanggal asli
+
+  console.log("Final chart data before rendering:", chartData);
 
   return chartData;
 };
@@ -65,8 +103,8 @@ const ChartComponent = ({ transactions }) => {
         }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-        <XAxis 
-            dataKey="name" 
+        <XAxis
+            dataKey="name"
             tick={{ fontSize: 10, fill: '#6B7280' }}
             axisLine={{ stroke: '#D1D5DB' }}
             tickLine={{ stroke: '#D1D5DB' }}
@@ -89,7 +127,7 @@ const ChartComponent = ({ transactions }) => {
         />
         {/* Legend dinonaktifkan karena sudah ada di atas grafik (di App.js) */}
         {/* <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} /> */}
-        
+
         {/* Garis untuk data 'income' (Pendapatan) - Warna Biru */}
         <Line
           type="monotone"
